@@ -1,0 +1,13 @@
+import { Body, Controller, Post } from '@nestjs/common';
+import { AuthService } from './auth.service';
+import { GoogleCredentialDto } from './dtos/google-credential.dto';
+
+@Controller('auth')
+export class AuthController {
+	constructor(private readonly authService: AuthService) {}
+
+	@Post('google')
+	authenticateWithGoogle(@Body() body: GoogleCredentialDto) {
+		return this.authService.authenticateWithGoogle(body?.credential);
+	}
+}
