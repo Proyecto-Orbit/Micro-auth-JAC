@@ -5,4 +5,5 @@ export interface GoogleAuthResponseDto {
   rol: RoleName;
   nombre: string;
   email?: string;
+  token: string;
 }

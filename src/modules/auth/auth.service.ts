@@ -4,6 +4,7 @@ import {
 	InternalServerErrorException,
 	UnauthorizedException,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { OAuth2Client } from 'google-auth-library';
 import { UsuarioRepository } from '../access-data/repositories/usuario.repository';
 import {
@@ -17,6 +18,7 @@ export class AuthService {
 
 	constructor(
 		private readonly usuarioRepository: UsuarioRepository,
+		private readonly jwtService: JwtService,
 	) {}
 
 	async authenticateWithGoogle(	credential: string,): Promise<GoogleAuthResponseDto> {
@@ -60,12 +62,32 @@ export class AuthService {
 			}
 
 			const rol = usuario.rol.nombre as RoleName;
+			const jwtSecret = process.env.JWT_SECRET?.trim();
+			if (!jwtSecret) {
+				throw new InternalServerErrorException(
+					'JWT_SECRET no está configurado en el backend',
+				);
+			}
+
+			const token = await this.jwtService.signAsync(
+				{
+					sub: payload.sub,
+					email,
+					nombre: payload.name,
+					rol,
+				},
+				{
+					secret: jwtSecret,
+					expiresIn: '8h',
+				},
+			);
 
 			return {
 				usuario: payload.sub,
 				rol,
 				nombre: payload.name,
 				email,
+				token,
 			};
 		} catch (error) {
 			if (error instanceof UnauthorizedException) {
