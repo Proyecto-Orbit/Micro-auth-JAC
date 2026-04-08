@@ -9,7 +9,7 @@ export class RolEntity {
 	@PrimaryGeneratedColumn({ type: 'int' })
 	id!: number;
 
-	@Column({ type: 'varchar', length: 20 })
+	@Column({ type: 'varchar', length: 20, unique: true })
 	nombre!: RolNombre;
 
 	@OneToMany(() => UsuarioEntity, (usuario) => usuario.rol)

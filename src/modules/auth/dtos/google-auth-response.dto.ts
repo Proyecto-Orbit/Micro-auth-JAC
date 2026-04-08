@@ -1,4 +1,4 @@
-export type RoleName = 'admin' | 'operador' | 'usuario';
+export type RoleName = 'admin' | 'operador';
 
 export interface GoogleAuthResponseDto {
   usuario: string;

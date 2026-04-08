@@ -4,7 +4,8 @@ import {
 	InternalServerErrorException,
 	UnauthorizedException,
 } from '@nestjs/common';
-import { OAuth2Client, TokenPayload } from 'google-auth-library';
+import { OAuth2Client } from 'google-auth-library';
+import { UsuarioRepository } from '../access-data/repositories/usuario.repository';
 import {
 	GoogleAuthResponseDto,
 	RoleName,
@@ -13,6 +14,10 @@ import {
 @Injectable()
 export class AuthService {
 	private readonly googleClient = new OAuth2Client();
+
+	constructor(
+		private readonly usuarioRepository: UsuarioRepository,
+	) {}
 
 	async authenticateWithGoogle(	credential: string,): Promise<GoogleAuthResponseDto> {
 		if (!credential?.trim()) {
@@ -43,11 +48,24 @@ export class AuthService {
 				throw new UnauthorizedException('La cuenta de Google no está verificada');
 			}
 
+			const email = payload.email?.trim().toLowerCase();
+			if (!email) {
+				throw new UnauthorizedException('No fue posible obtener el correo del usuario');
+			}
+
+			const usuario = await this.usuarioRepository.findByCorreo(email); // Aqui se hace la llamada al repositorio bro.
+
+			if (!usuario?.rol?.nombre) {
+				throw new UnauthorizedException('El usuario no está registrado en el sistema');
+			}
+
+			const rol = usuario.rol.nombre as RoleName;
+
 			return {
 				usuario: payload.sub,
-				rol: this.resolveRole(payload),
+				rol,
 				nombre: payload.name,
-				email: payload.email,
+				email,
 			};
 		} catch (error) {
 			if (error instanceof UnauthorizedException) {
@@ -56,34 +74,5 @@ export class AuthService {
 
 			throw new UnauthorizedException('Credencial de Google inválida o expirada');
 		}
-	}
-
-	private resolveRole(payload: TokenPayload): RoleName {
-		const normalizedEmail = payload.email?.toLowerCase();
-
-		if (this.isEmailInList(normalizedEmail, "spartanjuanv@gmail.com")) {
-			return 'admin';
-		}
-
-		if (this.isEmailInList(normalizedEmail, "test@gmail.com")) {
-			return 'operador';
-		}
-
-		return 'usuario';
-	}
-
-	private isEmailInList(
-		email: string | undefined,
-		rawList: string | undefined,
-	): boolean {
-		if (!email || !rawList) {
-			return false;
-		}
-
-		return rawList
-			.split(',')
-			.map((item) => item.trim().toLowerCase())
-			.filter(Boolean)
-			.includes(email);
 	}
 }
