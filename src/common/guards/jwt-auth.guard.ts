@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { AUTH_COOKIE_NAME } from '../constants/auth.constants';
 
 type JwtPayload = {
 	sub: string;
@@ -25,7 +26,9 @@ export class JwtAuthGuard implements CanActivate {
 		private readonly reflector: Reflector,
 		private readonly jwtService: JwtService,
 	) {}
-
+	/*
+	Metodo principal del guardia de autenticacion JWT. Verifica si la ruta es pública, extrae el token JWT de la cabecera o cookie.
+	*/
 	async canActivate(context: ExecutionContext): Promise<boolean> {
 		const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
 			context.getHandler(),
@@ -38,7 +41,11 @@ export class JwtAuthGuard implements CanActivate {
 
 		const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
 		const authHeader = request.headers.authorization;
-		const token = this.extractToken(authHeader);
+		// Extracción de cookie
+		const cookieToken = request.cookies?.[AUTH_COOKIE_NAME] as
+			| string
+			| undefined;
+		const token = this.extractToken(authHeader, cookieToken);
 
 		if (!token) {
 			throw new UnauthorizedException('Token JWT no proporcionado');
@@ -59,16 +66,21 @@ export class JwtAuthGuard implements CanActivate {
 		}
 	}
 
-	private extractToken(authHeader?: string): string | null {
-		if (!authHeader) {
-			return null;
+	/*
+	Metodo para extraer el token sea mediante la cabecera Authorization o mediante la cookie de autenticacion. Prioriza el token en la cabecera si ambos estan presentes.
+	*/
+	private extractToken(authHeader?: string, cookieToken?: string): string | null {
+		if (authHeader) {
+			const [type, token] = authHeader.split(' ');
+			if (type === 'Bearer' && token) {
+				return token;
+			}
 		}
 
-		const [type, token] = authHeader.split(' ');
-		if (type !== 'Bearer' || !token) {
-			return null;
+		if (cookieToken?.trim()) {
+			return cookieToken.trim();
 		}
 
-		return token;
+		return null;
 	}
 }

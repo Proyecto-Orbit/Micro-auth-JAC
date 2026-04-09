@@ -21,9 +21,21 @@ const parsePort = (value: unknown, fallback: number, keyName: string): number =>
 	return parsed;
 };
 
+const optionalString = (value: unknown, fallback: string): string => {
+	if (typeof value !== 'string' || !value.trim()) {
+		return fallback;
+	}
+
+	return value.trim();
+};
+
 export const validateEnvConfig = (config: EnvConfig): EnvConfig => ({
 	...config,
 	PORT: parsePort(config.PORT, 3000, 'PORT'),
 	DB_PORT: parsePort(config.DB_PORT, 5432, 'DB_PORT'),
 	JWT_SECRET: requiredString(config.JWT_SECRET, 'JWT_SECRET'),
+	ALLOWED_ORIGINS: optionalString(
+		config.ALLOWED_ORIGINS,
+		'http://localhost:5173',
+	),
 });
