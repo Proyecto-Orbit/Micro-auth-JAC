@@ -11,8 +11,12 @@ import { AuthModule } from './modules/auth/auth.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { UsersModule } from './modules/users/users.module';
 
-
-// TODO - Entender que mierda es eso de validateEnvConfig y getDatabaseConfig, y como se relaciona con el .env.
+/**
+ * AppModule: Modulo raiz de la aplicacion.
+ * - Carga configuracion global de entorno.
+ * - Registra JWT y TypeORM.
+ * - Declara guards globales de autenticacion y autorizacion.
+ */
 @Module({
   imports: [
     ConfigModule.forRoot({

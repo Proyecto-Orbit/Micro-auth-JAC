@@ -4,16 +4,20 @@ import {
 	Entity,
 	JoinColumn,
 	ManyToOne,
-	OneToMany,
 	PrimaryColumn,
 } from 'typeorm';
-import { CambioEntity } from './cambio.entity';
 import { RolEntity } from './rol.entity';
 
+/**
+ * UsuarioEstado: Estados permitidos para un usuario.
+ */
 export type UsuarioEstado = 'activo' | 'inactivo';
 
 @Entity({ name: 'usuario' })
 @Check('CHK_USUARIO_ESTADO', `"estado" IN ('activo', 'inactivo')`)
+/**
+ * UsuarioEntity: Entidad persistente de usuario autenticable.
+ */
 export class UsuarioEntity {
 	@PrimaryColumn({ type: 'varchar', length: 255 })
 	correo!: string;
@@ -30,10 +34,4 @@ export class UsuarioEntity {
 
 	@Column({ type: 'varchar', length: 100 })
 	apellido!: string;
-
-	@OneToMany(() => CambioEntity, (cambio) => cambio.usuarioCreador)
-	cambiosCreados!: CambioEntity[];
-
-	@OneToMany(() => CambioEntity, (cambio) => cambio.usuarioAprueba)
-	cambiosAprobados!: CambioEntity[];
 }

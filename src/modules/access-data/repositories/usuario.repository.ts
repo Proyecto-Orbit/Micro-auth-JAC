@@ -4,6 +4,9 @@ import { EntityManager, Repository } from 'typeorm';
 import { RolEntity } from '../model/rol.entity';
 import { UsuarioEntity, UsuarioEstado } from '../model/usuario.entity';
 
+/**
+ * CreateUsuarioInput: Estructura requerida para crear un usuario.
+ */
 export interface CreateUsuarioInput {
 	correo: string;
 	nombre: string;
@@ -12,6 +15,9 @@ export interface CreateUsuarioInput {
 	rol: RolEntity;
 }
 
+/**
+ * UsuarioRepository: Acceso a datos para usuarios y cambios de rol.
+ */
 @Injectable()
 export class UsuarioRepository {
 	constructor(
@@ -19,6 +25,12 @@ export class UsuarioRepository {
 		private readonly usuarioOrmRepository: Repository<UsuarioEntity>,
 	) {}
 
+	/**
+	 * createUser: Crea y persiste un usuario nuevo.
+	 * @param input Datos de creacion del usuario.
+	 * @param manager EntityManager opcional para transacciones.
+	 * @returns {Promise<UsuarioEntity>} Usuario persistido.
+	 */
 	async createUser(input: CreateUsuarioInput, manager?: EntityManager): Promise<UsuarioEntity> {
 		const repository = this.getRepository(manager);
 		const correoNormalizado = this.normalizeCorreo(input.correo);
@@ -34,6 +46,12 @@ export class UsuarioRepository {
 		return repository.save(usuario);
 	}
 
+	/**
+	 * findByCorreo: Busca usuario por correo normalizado.
+	 * @param correo Correo del usuario.
+	 * @param manager EntityManager opcional para transacciones.
+	 * @returns {Promise<UsuarioEntity | null>} Usuario encontrado o null.
+	 */
 	async findByCorreo(correo: string, manager?: EntityManager): Promise<UsuarioEntity | null> {
 		const repository = this.getRepository(manager);
 
@@ -43,6 +61,13 @@ export class UsuarioRepository {
 		});
 	}
 
+	/**
+	 * updateRoleByCorreo: Actualiza el rol de un usuario por correo.
+	 * @param correo Correo del usuario a actualizar.
+	 * @param nuevoRol Nueva entidad de rol.
+	 * @param manager EntityManager opcional para transacciones.
+	 * @returns {Promise<UsuarioEntity | null>} Usuario actualizado o null si no existe.
+	 */
 	async updateRoleByCorreo(
 		correo: string,
 		nuevoRol: RolEntity,

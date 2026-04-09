@@ -2,6 +2,10 @@ import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
+/**
+ * bootstrap: Inicializa y configura la aplicacion NestJS.
+ * @returns {Promise<void>} Inicia el servidor HTTP.
+ */
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173')
@@ -9,7 +13,6 @@ async function bootstrap() {
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0);
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   app.use(cookieParser());
   app.enableCors({
     origin: allowedOrigins,
@@ -18,4 +21,4 @@ async function bootstrap() {
 
   await app.listen(process.env.PORT ?? 3000);
 }
-void bootstrap(); // WTF is this
+void bootstrap();

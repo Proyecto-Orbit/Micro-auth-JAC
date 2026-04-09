@@ -13,6 +13,9 @@ import {
 	RoleName,
 } from './dtos/google-auth-response.dto';
 
+/**
+ * SessionJwtPayload: Estructura del payload esperado en JWT de sesion.
+ */
 type SessionJwtPayload = {
 	sub: string;
 	email?: string;
@@ -20,6 +23,9 @@ type SessionJwtPayload = {
 	rol: string;
 };
 
+/**
+ * AuthService: Servicio de autenticacion con Google y gestion de sesion JWT.
+ */
 @Injectable()
 export class AuthService {
 	private readonly googleClient = new OAuth2Client();
@@ -28,12 +34,11 @@ export class AuthService {
 		private readonly usuarioRepository: UsuarioRepository,
 		private readonly jwtService: JwtService,
 	) {}
-	/*
-	Metodo principal encargado de la autenticacion y autorizacion de usuarios mediante Google. Valida la credencial recibida,
-	verifica la cuenta de Google, obtiene o valida el rol del usuario en el sistema, 
-	y genera un token JWT con la informacion del usuario y su rol para ser usado en futuras solicitudes autenticadas.
-	@param string credential - La credencial de Google recibida desde el cliente, que contiene el ID token a validar.
-	*/
+	/**
+	 * authenticateWithGoogle: Autentica usuario con credencial de Google y emite JWT.
+	 * @param credential ID token de Google recibido desde el cliente.
+	 * @returns {Promise<GoogleAuthWithTokenDto>} Datos de sesion y token JWT.
+	 */
 	async authenticateWithGoogle(credential: string): Promise<GoogleAuthWithTokenDto> {
 		if (!credential?.trim()) {
 			throw new BadRequestException('No se recibió la credencial de Google');
@@ -68,7 +73,7 @@ export class AuthService {
 				throw new UnauthorizedException('No fue posible obtener el correo del usuario');
 			}
 
-			const usuario = await this.usuarioRepository.findByCorreo(email); // Aqui se hace la llamada al repositorio bro.
+			const usuario = await this.usuarioRepository.findByCorreo(email);
 
 			if (!usuario?.rol?.nombre) {
 				throw new UnauthorizedException('El usuario no está registrado en el sistema');
@@ -91,7 +96,7 @@ export class AuthService {
 				},
 				{
 					secret: jwtSecret,
-					expiresIn: '8h', // TODO: Configurar expiracion más corta y usar refresh tokens para sesiones más largas.
+					expiresIn: '8h',
 				},
 			);
 
@@ -112,9 +117,14 @@ export class AuthService {
 		}
 	}
 
+	/**
+	 * getSessionFromToken: Valida token JWT y retorna datos de sesion.
+	 * @param token Token JWT proveniente de cookie o cabecera.
+	 * @returns {Promise<GoogleAuthResponseDto>} Datos de sesion del usuario.
+	 */
 	async getSessionFromToken(token?: string): Promise<GoogleAuthResponseDto> {
 		if (!token?.trim()) {
-			throw new UnauthorizedException('No se encontró una sesión activa'); // TODO: Segura
+			throw new UnauthorizedException('No se encontró una sesión activa');
 		}
 
 		const jwtSecret = process.env.JWT_SECRET?.trim();
@@ -149,6 +159,11 @@ export class AuthService {
 		}
 	}
 
+	/**
+	 * isValidRole: Verifica si el rol pertenece al conjunto permitido.
+	 * @param role Rol recibido en el payload JWT.
+	 * @returns {role is RoleName} True cuando el rol es valido.
+	 */
 	private isValidRole(role: string): role is RoleName {
 		return role === 'admin' || role === 'operador' || role === 'usuario';
 	}

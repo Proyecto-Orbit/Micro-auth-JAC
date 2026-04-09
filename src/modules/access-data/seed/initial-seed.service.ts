@@ -2,7 +2,9 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { RolRepository } from '../repositories/rol.repository';
 import { UsuarioRepository } from '../repositories/usuario.repository';
 
-// BORRAR CUANDO SE MANDE A PRODUCCIÓN, SOLO PARA CREAR UN USUARIO ADMIN POR DEFECTO
+/**
+ * InitialSeedService: Ejecuta seed inicial de roles y usuario administrador.
+ */
 @Injectable()
 export class InitialSeedService implements OnApplicationBootstrap {
 	private readonly logger = new Logger(InitialSeedService.name);
@@ -13,6 +15,10 @@ export class InitialSeedService implements OnApplicationBootstrap {
 		private readonly usuarioRepository: UsuarioRepository,
 	) {}
 
+	/**
+	 * onApplicationBootstrap: Asegura roles por defecto y crea admin inicial si no existe.
+	 * @returns {Promise<void>} Finaliza el proceso de siembra inicial.
+	 */
 	async onApplicationBootstrap(): Promise<void> {
 		await this.rolRepository.ensureDefaultRoles();
 

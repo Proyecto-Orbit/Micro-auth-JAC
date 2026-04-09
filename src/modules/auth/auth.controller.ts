@@ -9,10 +9,19 @@ import { GoogleCredentialDto } from './dtos/google-credential.dto';
 import { GoogleAuthResponseDto } from './dtos/google-auth-response.dto';
 import { Public } from '../../common/decorators/public.decorator';
 
+/**
+ * AuthController: Controlador HTTP para autenticacion y sesion.
+ */
 @Controller('auth')
 export class AuthController {
 	constructor(private readonly authService: AuthService) {}
 
+	/**
+	 * authenticateWithGoogle: Autentica un usuario con credencial de Google.
+	 * @param body DTO con la credencial de Google.
+	 * @param response Respuesta HTTP para establecer cookie de sesion.
+	 * @returns {Promise<GoogleAuthResponseDto>} Datos de sesion del usuario autenticado.
+	 */
 	@Public()
 	@Post('google')
 	async authenticateWithGoogle(
@@ -33,6 +42,11 @@ export class AuthController {
 		return sessionUser;
 	}
 
+	/**
+	 * getSessionFromCookie: Obtiene la sesion actual desde la cookie de autenticacion.
+	 * @param request Solicitud HTTP entrante.
+	 * @returns {Promise<GoogleAuthResponseDto>} Datos de la sesion activa.
+	 */
 	@Public()
 	@Get('me')
 	getSessionFromCookie(@Req() request: Request): Promise<GoogleAuthResponseDto> {
@@ -40,6 +54,11 @@ export class AuthController {
 		return this.authService.getSessionFromToken(token);
 	}
 
+	/**
+	 * logout: Elimina la cookie de sesion actual.
+	 * @param response Respuesta HTTP para limpiar cookie.
+	 * @returns {{ message: string }} Confirmacion de cierre de sesion.
+	 */
 	@Public()
 	@Post('logout')
 	logout(@Res({ passthrough: true }) response: Response): { message: string } {

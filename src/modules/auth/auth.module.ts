@@ -4,6 +4,9 @@ import { AuthService } from './auth.service';
 import { UsersModule } from '../users/users.module';
 import { AccessDataModule } from '../access-data/access-data.module';
 
+/**
+ * AuthModule: Agrupa controlador y servicio de autenticacion.
+ */
 @Module({
 	imports: [UsersModule, AccessDataModule],
 	controllers: [AuthController],

@@ -4,8 +4,6 @@ import {
 	NotFoundException,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { CambioEstado } from '../access-data/model/cambio.entity';
-import { CambioRepository } from '../access-data/repositories/cambio.repository';
 import { RolRepository } from '../access-data/repositories/rol.repository';
 import { UsuarioRepository } from '../access-data/repositories/usuario.repository';
 import { ChangeUserRoleDto } from './dtos/change-user-role.dto';
@@ -16,7 +14,6 @@ export class RolesService {
 		private readonly dataSource: DataSource,
 		private readonly usuarioRepository: UsuarioRepository,
 		private readonly rolRepository: RolRepository,
-		private readonly cambioRepository: CambioRepository,
 	) {}
 
 	async changeUserRole(correo: string, input: ChangeUserRoleDto) {
@@ -68,26 +65,12 @@ export class RolesService {
 			const observaciones =
 				input.observaciones?.trim() ||
 				`Cambio de rol de ${datosAnteriores.rol} a ${datosNuevos.rol}`;
-
-			const cambio = await this.cambioRepository.registerCambio(
-				{
-					usuarioCreador: actor,
-					usuarioAprueba: actor,
-					tablaAfectada: 'usuario',
-					datosAnteriores,
-					datosNuevos,
-					estado: CambioEstado.APROBADO,
-					observaciones,
-					fechaAprobacion: new Date(),
-				},
-				manager,
-			);
-
+			// Seguramente cambie una vez que tengamos el modulo de auditoria.
 			return {
 				correo: updatedUser.correo,
 				rolAnterior: datosAnteriores.rol,
 				rolNuevo: datosNuevos.rol,
-				cambioId: cambio.id,
+				observaciones,
 			};
 		});
 	}
