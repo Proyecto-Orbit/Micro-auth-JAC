@@ -70,4 +70,7 @@ export const validateEnvConfig = (config: EnvConfig): EnvConfig => ({
 		config.ALLOWED_ORIGINS,
 		'http://localhost:5173',
 	),
+	ADMIN_CORREO: optionalString(config.ADMIN_CORREO, ''),
+	ADMIN_NOMBRE: optionalString(config.ADMIN_NOMBRE, 'Admin'),
+	ADMIN_APELLIDO: optionalString(config.ADMIN_APELLIDO, 'Sistema'),
 });

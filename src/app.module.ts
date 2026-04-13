@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { getDatabaseConfig } from './config/database.config';
 import { validateEnvConfig } from './config/env.config';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -29,12 +30,22 @@ import { UsersModule } from './modules/users/users.module';
     TypeOrmModule.forRootAsync({
       useFactory: getDatabaseConfig,
     }),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 30,
+      },
+    ]),
     AuthModule,
     UsersModule,
     RolesModule,
   ],
   controllers: [],
   providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

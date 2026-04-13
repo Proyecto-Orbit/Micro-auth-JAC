@@ -74,7 +74,7 @@ export class JwtAuthGuard implements CanActivate {
 
 		const jwtSecret = process.env.JWT_SECRET?.trim();
 		if (!jwtSecret) {
-			throw new InternalServerErrorException('JWT_SECRET no está configurado');
+			throw new InternalServerErrorException('Error interno del servidor');
 		}
 
 		try {

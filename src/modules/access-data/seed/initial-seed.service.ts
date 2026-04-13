@@ -8,7 +8,6 @@ import { UsuarioRepository } from '../repositories/usuario.repository';
 @Injectable()
 export class InitialSeedService implements OnApplicationBootstrap {
 	private readonly logger = new Logger(InitialSeedService.name);
-	private readonly adminCorreo = 'spartanjuanv@gmail.com';
 
 	constructor(
 		private readonly rolRepository: RolRepository,
@@ -22,7 +21,13 @@ export class InitialSeedService implements OnApplicationBootstrap {
 	async onApplicationBootstrap(): Promise<void> {
 		await this.rolRepository.ensureDefaultRoles();
 
-		const existingAdmin = await this.usuarioRepository.findByCorreo(this.adminCorreo);
+		const adminCorreo = process.env.ADMIN_CORREO?.trim();
+		if (!adminCorreo) {
+			this.logger.warn('Seed inicial: ADMIN_CORREO no configurado, omitiendo creación de admin.');
+			return;
+		}
+
+		const existingAdmin = await this.usuarioRepository.findByCorreo(adminCorreo);
 		if (existingAdmin) {
 			this.logger.debug('Seed inicial: usuario admin ya existe, no se realizan cambios.');
 			return;
@@ -35,9 +40,9 @@ export class InitialSeedService implements OnApplicationBootstrap {
 		}
 
 		await this.usuarioRepository.createUser({
-			correo: this.adminCorreo,
-			nombre: 'Juan',
-			apellido: 'Vela',
+			correo: adminCorreo,
+			nombre: process.env.ADMIN_NOMBRE?.trim() ?? 'Admin',
+			apellido: process.env.ADMIN_APELLIDO?.trim() ?? 'Sistema',
 			estado: 'activo',
 			rol: adminRole,
 		});

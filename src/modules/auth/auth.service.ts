@@ -46,9 +46,7 @@ export class AuthService {
 
 		const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim();
 		if (!googleClientId) {
-			throw new InternalServerErrorException(
-				'GOOGLE_CLIENT_ID no está configurado en el backend',
-			);
+			throw new InternalServerErrorException('Error interno del servidor');
 		}
 
 		try {
@@ -82,9 +80,7 @@ export class AuthService {
 			const rol = usuario.rol.nombre as RoleName;
 			const jwtSecret = process.env.JWT_SECRET?.trim();
 			if (!jwtSecret) {
-				throw new InternalServerErrorException(
-					'JWT_SECRET no está configurado en el backend',
-				);
+				throw new InternalServerErrorException('Error interno del servidor');
 			}
 
 			const token = await this.jwtService.signAsync(
@@ -129,9 +125,7 @@ export class AuthService {
 
 		const jwtSecret = process.env.JWT_SECRET?.trim();
 		if (!jwtSecret) {
-			throw new InternalServerErrorException(
-				'JWT_SECRET no está configurado en el backend',
-			);
+			throw new InternalServerErrorException('Error interno del servidor');
 		}
 
 		try {

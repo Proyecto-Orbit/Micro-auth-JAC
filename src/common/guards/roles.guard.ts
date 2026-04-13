@@ -56,8 +56,9 @@ export class RolesGuard implements CanActivate {
 			throw new UnauthorizedException('Usuario no autenticado');
 		}
 
-		if (role !== 'admin') {
-			throw new ForbiddenException('Solo los usuarios administradores pueden operar');
+		const rolesPermitidos: string[] = ['admin', 'operador'];
+		if (!rolesPermitidos.includes(role)) {
+			throw new ForbiddenException('No tienes permisos para realizar esta acción');
 		}
 
 		return true;
