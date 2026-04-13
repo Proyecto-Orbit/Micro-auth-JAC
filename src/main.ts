@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
@@ -29,6 +30,17 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+    // Swagger Documentation Setup
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Microservicio de autenticación')
+    .setDescription('API para autenticación, gestión de sesiones usando Google OAuth2 y JWT, control de acceso basado en roles y manejo de usuarios del sistema en general')
+    .setVersion('1.0')
+    .addTag('auth')
+    .build();
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+
+  SwaggerModule.setup('api/docs', app, document);
 
   await app.listen(process.env.PORT ?? 3000);
 }
