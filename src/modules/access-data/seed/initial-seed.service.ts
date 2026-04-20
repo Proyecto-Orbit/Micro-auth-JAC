@@ -15,22 +15,26 @@ export class InitialSeedService implements OnApplicationBootstrap {
 	) {}
 
 	/**
-	 * onApplicationBootstrap: Asegura roles por defecto y crea admin inicial si no existe.
+	 * onApplicationBootstrap: Asegura roles por defecto y crea admin inicial si no existe. SERA ELIMINADO EN PRODUCCION, SOLO PARA DESARROLLO.
 	 * @returns {Promise<void>} Finaliza el proceso de siembra inicial.
 	 */
 	async onApplicationBootstrap(): Promise<void> {
 		await this.rolRepository.ensureDefaultRoles();
 
-		const adminCorreo = process.env.ADMIN_CORREO?.trim();
-		if (!adminCorreo) {
-			this.logger.warn('Seed inicial: ADMIN_CORREO no configurado, omitiendo creación de admin.');
+		const adminCorreos = this.parseEnvList('ADMIN_CORREOS');
+		const adminNombres = this.parseEnvList('ADMIN_NOMBRES');
+		const adminApellidos = this.parseEnvList('ADMIN_APELLIDOS');
+
+		// Validacion de que las variables de entorno para admin esten configuradas correctamente.
+		if (adminCorreos.length === 0) {
+			this.logger.warn('Seed inicial: ADMIN_CORREOS no configurado, omitiendo creación de admins.');
 			return;
 		}
 
-		const existingAdmin = await this.usuarioRepository.findByCorreo(adminCorreo);
-		if (existingAdmin) {
-			this.logger.debug('Seed inicial: usuario admin ya existe, no se realizan cambios.');
-			return;
+		if (adminCorreos.length !== adminNombres.length || adminCorreos.length !== adminApellidos.length) {
+			throw new Error(
+				'Seed inicial inválido: ADMIN_CORREOS, ADMIN_NOMBRES y ADMIN_APELLIDOS deben tener la misma cantidad de elementos.',
+			);
 		}
 
 		const adminRole = await this.rolRepository.findByNombre('admin');
@@ -39,14 +43,30 @@ export class InitialSeedService implements OnApplicationBootstrap {
 			return;
 		}
 
-		await this.usuarioRepository.createUser({
-			correo: adminCorreo,
-			nombre: process.env.ADMIN_NOMBRE?.trim() ?? 'Admin',
-			apellido: process.env.ADMIN_APELLIDO?.trim() ?? 'Sistema',
-			estado: 'activo',
-			rol: adminRole,
-		});
+		let createdAdmins = 0;
+		for (let index = 0; index < adminCorreos.length; index++) {
+			const correo = adminCorreos[index];
+			const existingAdmin = await this.usuarioRepository.findByCorreo(correo);
+			if (existingAdmin) {
+				this.logger.debug(`Seed inicial: usuario admin ${correo} ya existe, no se realizan cambios.`);
+				continue;
+			}
 
-		this.logger.log('Seed inicial ejecutado: creado usuario admin por defecto.');
+			await this.usuarioRepository.createUser({
+				correo,
+				nombre: adminNombres[index],
+				apellido: adminApellidos[index],
+				estado: 'activo',
+				rol: adminRole,
+			});
+
+			createdAdmins++;
+		}
+
+		this.logger.log(`Seed inicial ejecutado: creados ${createdAdmins} administrador(es).`);
+	}
+
+	private parseEnvList(envVarName: string): string[] {
+		return process.env[envVarName]?.split(',').map((value) => value.trim()).filter(Boolean) ?? [];
 	}
 }
