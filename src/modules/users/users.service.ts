@@ -7,13 +7,15 @@ import {
 import { RolRepository } from '../access-data/repositories/rol.repository';
 import { UsuarioRepository } from '../access-data/repositories/usuario.repository';
 import { CreateUserDto } from './dtos/create-user.dto';
+import { ProductorUsuariosService } from './colaDeMensajes/productor-usuarios.service';
 
 @Injectable()
 export class UsersService {
 	constructor(
 		private readonly usuarioRepository: UsuarioRepository,
 		private readonly rolRepository: RolRepository,
-	) {}
+		private readonly productor: ProductorUsuariosService,
+	) { }
 
 	async createUser(input: CreateUserDto) {
 		if (!input?.correo?.trim() || !input?.nombre?.trim() || !input?.apellido?.trim()) {
@@ -40,6 +42,17 @@ export class UsersService {
 			estado: input.estado,
 			rol,
 		});
+		//Envio de datos usando la cola de mesnajeria
+		try {
+			this.productor.emitirUsuarioCreadoOActualizado({
+				id: createdUser.correo,
+				correo: createdUser.correo,
+				nombre: `${createdUser.nombre} ${createdUser.apellido || ''}`.trim(),
+				rol: createdUser.rol.nombre,
+			});
+		} catch (error) {
+			console.error('Error al emitir evento a RabbitMQ:', error);
+		}
 
 		return this.toUserResponse(createdUser);
 	}
