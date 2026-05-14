@@ -9,7 +9,6 @@ import { OAuth2Client } from 'google-auth-library';
 import { UsuarioRepository } from '../access-data/repositories/usuario.repository';
 import {
 	GoogleAuthResponseDto,
-	GoogleAuthWithTokenDto,
 	RoleName,
 } from './dtos/google-auth-response.dto';
 
@@ -37,9 +36,9 @@ export class AuthService {
 	/**
 	 * authenticateWithGoogle: Autentica usuario con credencial de Google y emite JWT.
 	 * @param credential ID token de Google recibido desde el cliente.
-	 * @returns {Promise<GoogleAuthWithTokenDto>} Datos de sesion y token JWT.
+	 * @returns {Promise<GoogleAuthResponseDto>} Datos de sesion y token JWT.
 	 */
-	async authenticateWithGoogle(credential: string): Promise<GoogleAuthWithTokenDto> {
+	async authenticateWithGoogle(credential: string): Promise<GoogleAuthResponseDto> {
 		if (!credential?.trim()) {
 			throw new BadRequestException('No se recibió la credencial de Google');
 		}
