@@ -1,98 +1,115 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Microservicio de gestión de usuarios (Keycloak)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Microservicio NestJS encargado de la **gestión administrativa de usuarios** del realm de Keycloak para la plataforma JAC. Reemplaza al anterior microservicio de autenticación con Google OAuth 2.0: ahora la autenticación la maneja Keycloak directamente desde el frontend, y este servicio actúa como capa administrativa sobre la **Admin REST API de Keycloak**.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Responsabilidades
 
-## Description
+- Crear usuarios en el realm con su rol asignado (`admin` u `operador`).
+- Modificar la información personal de operadores.
+- Desactivar usuarios (`enabled = false`).
+- Eliminar usuarios del realm.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Todas las operaciones se ejecutan contra la Admin REST API usando un **admin access token de servicio** (grant `client_credentials`) que el microservicio obtiene y cachea internamente, refrescándolo automáticamente antes de expirar.
 
-## Project setup
+## Arquitectura
 
-```bash
-$ npm install
+```
+Frontend (keycloak-js) ──► Authorization: Bearer <access_token>
+                              │
+                              ▼
+                  ┌───────────────────────────┐
+                  │   Microservicio (Nest)    │
+                  │                           │
+                  │  KeycloakAuthGuard        │  ── introspect ──► Keycloak
+                  │  RolesGuard (admin)       │
+                  │  UsersController          │
+                  │  UsersService             │  ── Admin REST API ──► Keycloak
+                  │  KeycloakAdminService     │  ── client_credentials ──► Keycloak
+                  └───────────────────────────┘
 ```
 
-## Compile and run the project
+- **`KeycloakAuthGuard`** — extrae `Authorization: Bearer <token>`, lo valida vía endpoint de introspección (`/protocol/openid-connect/token/introspect`) y deja `request.user = { sub, username, email, roles }`.
+- **`RolesGuard`** — exige que el usuario autenticado tenga alguno de los roles declarados con `@Roles(...)`. Todo el `UsersController` está marcado `@Roles('admin')`.
+- **`KeycloakAdminService`** — obtiene y cachea el admin token (client_credentials) y expone un cliente axios preconfigurado con `baseURL = /admin/realms/{realm}` y `Authorization: Bearer` ya inyectado.
+- **`UsersService`** — implementa el CRUD contra `/users`, `/users/{id}`, `/roles/{name}` y `/users/{id}/role-mappings/realm`.
 
-```bash
-# development
-$ npm run start
+## Restricciones de negocio
 
-# watch mode
-$ npm run start:dev
+- **Bearer Token obligatorio**: el JWT viaja siempre como `Authorization: Bearer <token>`. No se usa cookie HTTP-Only.
+- **Solo administradores**: todos los endpoints requieren rol `admin` en `realm_access.roles` del token entrante.
+- **Modificación restringida a operadores**: `PATCH /users/:id` solo permite editar usuarios que tengan rol `operador`. Si el target es `admin`, responde `403 Forbidden`.
 
-# production mode
-$ npm run start:prod
+## Endpoints
+
+Base URL: `http://localhost:3000` · Documentación Swagger: `http://localhost:3000/api/docs`
+
+| Método | Ruta              | Descripción                                                          |
+| ------ | ----------------- | -------------------------------------------------------------------- |
+| GET    | `/usuarios`       | Lista los usuarios del realm con rol `admin` u `operador`.           |
+| POST   | `/usuarios`       | Crea un operador. Body: `{ correo, rol: "operador" }`.               |
+| PATCH  | `/usuarios/:id`   | Actualiza `nombre` y/o `activo` (solo operadores).                   |
+| DELETE | `/usuarios/:id`   | Elimina al usuario del realm de forma permanente.                    |
+
+Todos los endpoints exigen `Authorization: Bearer <access_token>` de un usuario con rol `admin`.
+
+### Formato de respuesta
+
+```json
+{
+  "id": "uuid",
+  "nombre": "Juan Perez",
+  "correo": "jperez@example.com",
+  "rol": "operador",
+  "activo": true
+}
 ```
 
-## Run tests
+`nombre` se almacena en Keycloak como `firstName` + `lastName` (split por el primer espacio).
+Al crear un operador no se exige contraseña: el usuario debe definirla la primera vez vía
+"Olvidé mi contraseña" (el usuario queda con `requiredActions: ["UPDATE_PASSWORD"]`).
+
+## Configuración
+
+Variables de entorno (ver `.env.example`):
+
+| Variable                       | Descripción                                                        |
+| ------------------------------ | ------------------------------------------------------------------ |
+| `PORT`                         | Puerto HTTP (por defecto `3000`).                                  |
+| `ALLOWED_ORIGINS`              | Orígenes CORS permitidos, separados por coma.                      |
+| `KEYCLOAK_BASE_URL`            | URL base del servidor Keycloak (ej. `http://localhost:8080`).      |
+| `KEYCLOAK_REALM`               | Realm objetivo (ej. `jac-project`).                                |
+| `KEYCLOAK_ADMIN_CLIENT_ID`     | Cliente confidencial con service-account habilitado.               |
+| `KEYCLOAK_ADMIN_CLIENT_SECRET` | Secret del cliente admin.                                          |
+| `KEYCLOAK_PUBLIC_CLIENT_ID`    | Cliente público usado por el frontend (`frontend-client`).         |
+
+### Setup requerido en Keycloak
+
+1. Crear un cliente confidencial (ej. `admin-cli-service`) en el realm `jac-project` con **Service Accounts Enabled = ON**.
+2. En la pestaña **Service Account Roles** del cliente, asignar del cliente `realm-management` los roles:
+   - `manage-users`
+   - `query-users`
+   - `view-users`
+3. Copiar el **Client Secret** a la variable `KEYCLOAK_ADMIN_CLIENT_SECRET`.
+4. Asegurar que el realm tenga los roles realm-level `admin` y `operador`.
+
+## Stack
+
+NestJS 11 · TypeScript · axios · class-validator · helmet · @nestjs/throttler · @nestjs/swagger.
+
+El microservicio es **stateless**: no usa base de datos propia ni cola de mensajes. Keycloak es la única fuente de verdad de usuarios.
+
+## Instalación y ejecución
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm install
+cp .env.example .env   # y completar los valores
+npm run start:dev
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Tests
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm run test
+npm run test:e2e
+npm run test:cov
 ```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).

@@ -1,47 +1,48 @@
-import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import cookieParser from 'cookie-parser';
+import { ConfigService } from '@nestjs/config';
+import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 
-/**
- * bootstrap: Inicializa y configura la aplicacion NestJS.
- * @returns {Promise<void>} Inicia el servidor HTTP.
- */
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter((origin) => origin.length > 0);
+	const app = await NestFactory.create(AppModule);
+	const config = app.get(ConfigService);
 
-  app.use(helmet());
-  app.use(cookieParser());
-  app.enableCors({
-    origin: allowedOrigins,
-    credentials: true,
-  });
+	const allowedOrigins = config
+		.get<string>('ALLOWED_ORIGINS', 'http://localhost:5173')
+		.split(',')
+		.map((origin) => origin.trim())
+		.filter((origin) => origin.length > 0);
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+	app.use(helmet());
+	app.enableCors({
+		origin: allowedOrigins,
+		credentials: false,
+	});
 
-    // Swagger Documentation Setup
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Microservicio de autenticación')
-    .setDescription('API para autenticación, gestión de sesiones usando Google OAuth2 y JWT, control de acceso basado en roles y manejo de usuarios del sistema en general')
-    .setVersion('1.0')
-    .addTag('auth')
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
+	app.useGlobalPipes(
+		new ValidationPipe({
+			whitelist: true,
+			forbidNonWhitelisted: true,
+			transform: true,
+		}),
+	);
 
-  SwaggerModule.setup('api/docs', app, document);
+	const swaggerConfig = new DocumentBuilder()
+		.setTitle('Microservicio de gestion de usuarios (Keycloak)')
+		.setDescription(
+			'API administrativa que opera sobre el realm de Keycloak via Admin REST API. ' +
+				'Todos los endpoints requieren un Bearer access token de un usuario con rol admin.',
+		)
+		.setVersion('1.0')
+		.addBearerAuth()
+		.addTag('Usuarios')
+		.build();
+	const document = SwaggerModule.createDocument(app, swaggerConfig);
+	SwaggerModule.setup('api/docs', app, document);
 
-  await app.listen(process.env.PORT ?? 3000);
+	const port = config.get<number>('PORT', 3000);
+	await app.listen(port);
 }
 void bootstrap();

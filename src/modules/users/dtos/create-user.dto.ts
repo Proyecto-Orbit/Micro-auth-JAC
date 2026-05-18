@@ -1,47 +1,44 @@
-import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
-import type { RolNombre } from '../../access-data/model/rol.entity';
-import type { UsuarioEstado } from '../../access-data/model/usuario.entity';
 import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsIn, IsString, MaxLength, MinLength } from 'class-validator';
+
+/**
+ * Roles existentes en el sistema. Solo se pueden crear admin/operador via API.
+ * El rol superadmin se asigna manualmente en Keycloak.
+ */
+export const SYSTEM_ROLES = ['superadmin', 'admin', 'operador'] as const;
+export type SystemRole = (typeof SYSTEM_ROLES)[number];
+
+export const CREATABLE_ROLES = ['admin', 'operador'] as const;
+export type CreatableRole = (typeof CREATABLE_ROLES)[number];
 
 export class CreateUserDto {
+	@ApiProperty({ example: 'jperez@example.com' })
 	@IsEmail()
-	@MaxLength(255)
-	@ApiProperty({
-		description: 'El correo electrónico del usuario',
-		example: 'user@example.com'
-	})
 	correo!: string;
 
+	@ApiProperty({ example: 'Juan' })
 	@IsString()
-	@IsNotEmpty()
-	@MaxLength(100)
-	@ApiProperty({
-		description: 'El nombre del usuario',
-		example: 'Juan'
-	})
+	@MinLength(1)
 	nombre!: string;
 
+	@ApiProperty({ example: 'Perez' })
 	@IsString()
-	@IsNotEmpty()
-	@MaxLength(100)
-	@ApiProperty({
-		description: 'El apellido del usuario',
-		example: 'Pérez'
-	})
+	@MinLength(1)
 	apellido!: string;
 
-	@IsIn(['admin', 'operador'] satisfies RolNombre[])
-	@ApiProperty({
-		description: 'El rol del usuario',
-		enum: ['admin', 'operador']
-	})
-	rol!: RolNombre;
+	@ApiProperty({ enum: CREATABLE_ROLES, example: 'operador' })
+	@IsIn(CREATABLE_ROLES as unknown as string[])
+	rol!: CreatableRole;
 
-	@IsOptional()
-	@IsIn(['activo', 'inactivo'] satisfies UsuarioEstado[])
 	@ApiProperty({
-		description: 'El estado del usuario',
-		enum: ['activo', 'inactivo']
+		example: 'TempPass123!',
+		description:
+			'Contrasena temporal. El usuario debera cambiarla obligatoriamente en su primer login.',
+		minLength: 8,
+		maxLength: 128,
 	})
-	estado?: UsuarioEstado;
+	@IsString()
+	@MinLength(8)
+	@MaxLength(128)
+	passwordTemporal!: string;
 }

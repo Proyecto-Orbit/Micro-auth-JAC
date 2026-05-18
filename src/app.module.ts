@@ -1,59 +1,37 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
 import { APP_GUARD } from '@nestjs/core';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { getDatabaseConfig } from './config/database.config';
-import { validateEnvConfig } from './config/env.config';
-import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { KeycloakAuthGuard } from './common/guards/keycloak-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
-import { AuthModule } from './modules/auth/auth.module';
-import { RolesModule } from './modules/roles/roles.module';
+import { validateEnvConfig } from './config/env.config';
+import { KeycloakModule } from './modules/keycloak/keycloak.module';
 import { UsersModule } from './modules/users/users.module';
 
 /**
- * AppModule: Modulo raiz de la aplicacion.
- * - Carga configuracion global de entorno.
- * - Registra JWT y TypeORM.
- * - Declara guards globales de autenticacion y autorizacion.
+ * AppModule: configuracion global del microservicio.
+ * Aplica guards globales: throttling, validacion de Bearer token contra Keycloak
+ * y autorizacion por roles (admin/operador del realm).
  */
 @Module({
-  imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      validate: validateEnvConfig,
-    }),
-    JwtModule.register({
-      global: true,
-    }),
-    TypeOrmModule.forRootAsync({
-      useFactory: getDatabaseConfig,
-    }),
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000,
-        limit: 30,
-      },
-    ]),
-    AuthModule,
-    UsersModule,
-    RolesModule,
-  ],
-  controllers: [],
-  providers: [
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: JwtAuthGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: RolesGuard,
-    },
-  ],
+	imports: [
+		ConfigModule.forRoot({
+			isGlobal: true,
+			validate: validateEnvConfig,
+		}),
+		ThrottlerModule.forRoot([
+			{
+				ttl: 60_000,
+				limit: 30,
+			},
+		]),
+		KeycloakModule,
+		UsersModule,
+	],
+	providers: [
+		{ provide: APP_GUARD, useClass: ThrottlerGuard },
+		{ provide: APP_GUARD, useClass: KeycloakAuthGuard },
+		{ provide: APP_GUARD, useClass: RolesGuard },
+	],
 })
 export class AppModule {}
