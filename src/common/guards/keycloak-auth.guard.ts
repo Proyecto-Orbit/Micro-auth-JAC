@@ -2,52 +2,56 @@ import {
 	CanActivate,
 	ExecutionContext,
 	Injectable,
+	InternalServerErrorException,
 	Logger,
 	UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
-import axios, { AxiosError } from 'axios';
+import * as jwt from 'jsonwebtoken';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
-import { KeycloakAdminService } from '../../modules/keycloak/keycloak-admin.service';
 import type {
 	AuthenticatedRequest,
 	AuthenticatedUser,
 } from '../types/authenticated-request';
 
-type IntrospectionResponse = {
-	active: boolean;
-	sub?: string;
-	username?: string;
+interface KeycloakRealmResponse {
+	public_key?: string;
+}
+
+interface KeycloakTokenPayload {
+	sub: string;
 	preferred_username?: string;
 	email?: string;
 	realm_access?: { roles?: string[] };
-};
+}
 
 /**
  * KeycloakAuthGuard: extrae el Bearer token del header Authorization y lo valida
- * contra el endpoint de introspeccion de Keycloak. Si es valido, deja el usuario
- * y sus roles disponibles en `request.user`.
+ * verificando su firma RS256 contra la clave pública del realm de Keycloak.
+ *
+ * La clave pública se obtiene de Keycloak una sola vez y se cachea 10 minutos,
+ * evitando una llamada de red en cada petición (patrón offline/JWT).
  *
  * Rutas marcadas con @Public() se omiten.
  */
 @Injectable()
 export class KeycloakAuthGuard implements CanActivate {
 	private readonly logger = new Logger(KeycloakAuthGuard.name);
-	private readonly introspectUrl: string;
-	private readonly clientId: string;
-	private readonly clientSecret: string;
+	private readonly realmUrl: string;
+
+	// Caché de la clave pública
+	private cachedPublicKey?: string;
+	private cachedAt = 0;
+	private readonly CACHE_TTL_MS = 10 * 60_000; // 10 minutos
 
 	constructor(
 		private readonly reflector: Reflector,
 		config: ConfigService,
-		private readonly keycloak: KeycloakAdminService,
 	) {
 		const baseUrl = config.getOrThrow<string>('KEYCLOAK_BASE_URL');
 		const realm = config.getOrThrow<string>('KEYCLOAK_REALM');
-		this.introspectUrl = `${baseUrl}/realms/${encodeURIComponent(realm)}/protocol/openid-connect/token/introspect`;
-		this.clientId = config.getOrThrow<string>('KEYCLOAK_ADMIN_CLIENT_ID');
-		this.clientSecret = config.getOrThrow<string>('KEYCLOAK_ADMIN_CLIENT_SECRET');
+		this.realmUrl = `${baseUrl.replace(/\/+$/, '')}/realms/${encodeURIComponent(realm)}`;
 	}
 
 	async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -65,21 +69,29 @@ export class KeycloakAuthGuard implements CanActivate {
 			throw new UnauthorizedException('Token Bearer no proporcionado');
 		}
 
-		const introspection = await this.introspect(token);
-		if (!introspection.active || !introspection.sub) {
-			throw new UnauthorizedException('Token invalido o expirado');
+		const publicKey = await this.getPublicKey();
+
+		let payload: KeycloakTokenPayload;
+		try {
+			payload = jwt.verify(token, publicKey, {
+				algorithms: ['RS256'],
+			}) as KeycloakTokenPayload;
+		} catch {
+			throw new UnauthorizedException('Token inválido o expirado');
+		}
+
+		if (!payload.sub) {
+			throw new UnauthorizedException('Token sin identificador de usuario');
 		}
 
 		const user: AuthenticatedUser = {
-			sub: introspection.sub,
-			username: introspection.preferred_username ?? introspection.username,
-			email: introspection.email,
-			roles: introspection.realm_access?.roles ?? [],
+			sub: payload.sub,
+			username: payload.preferred_username,
+			email: payload.email,
+			roles: payload.realm_access?.roles ?? [],
 		};
 
 		request.user = user;
-		// Conservamos el token para que servicios downstream lo puedan reutilizar si lo necesitan.
-		void this.keycloak;
 		return true;
 	}
 
@@ -92,37 +104,43 @@ export class KeycloakAuthGuard implements CanActivate {
 		return value.trim();
 	}
 
-	private async introspect(token: string): Promise<IntrospectionResponse> {
-		const params = new URLSearchParams({
-			token,
-			client_id: this.clientId,
-			client_secret: this.clientSecret,
-		});
-
-		try {
-			const { data, status } = await axios.post<IntrospectionResponse>(
-				this.introspectUrl,
-				params.toString(),
-				{
-					headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-					validateStatus: () => true,
-				},
-			);
-
-			if (status !== 200 || !data) {
-				this.logger.warn(`Introspeccion respondio ${status}`);
-				throw new UnauthorizedException('No fue posible validar el token');
-			}
-
-			return data;
-		} catch (error) {
-			if (error instanceof UnauthorizedException) throw error;
-			const detail =
-				error instanceof AxiosError
-					? error.message
-					: 'Error desconocido en introspeccion';
-			this.logger.error(`Fallo introspeccion: ${detail}`);
-			throw new UnauthorizedException('No fue posible validar el token');
+	/**
+	 * Obtiene la clave pública RS256 del realm de Keycloak.
+	 * Se cachea durante CACHE_TTL_MS para evitar llamadas repetidas.
+	 */
+	private async getPublicKey(): Promise<string> {
+		if (this.cachedPublicKey && Date.now() - this.cachedAt < this.CACHE_TTL_MS) {
+			return this.cachedPublicKey;
 		}
+
+		let response: Response;
+		try {
+			response = await fetch(this.realmUrl);
+		} catch (error) {
+			this.logger.error('Error consultando clave pública de Keycloak', error);
+			throw new InternalServerErrorException('No se pudo obtener la clave pública de Keycloak');
+		}
+
+		if (!response.ok) {
+			this.logger.error(`Keycloak devolvió ${response.status} al consultar el realm`);
+			throw new InternalServerErrorException('No se pudo obtener la clave pública de Keycloak');
+		}
+
+		const json = (await response.json()) as KeycloakRealmResponse;
+		if (!json?.public_key) {
+			this.logger.error('Keycloak no devolvió public_key en el endpoint del realm');
+			throw new InternalServerErrorException('Respuesta inválida de Keycloak');
+		}
+
+		this.cachedPublicKey = this.formatPublicKey(json.public_key);
+		this.cachedAt = Date.now();
+		this.logger.log('Clave pública de Keycloak cacheada correctamente');
+		return this.cachedPublicKey;
+	}
+
+	private formatPublicKey(rawKey: string): string {
+		const normalized = rawKey.replace(/\s+/g, '');
+		const chunks = normalized.match(/.{1,64}/g) ?? [normalized];
+		return ['-----BEGIN PUBLIC KEY-----', ...chunks, '-----END PUBLIC KEY-----'].join('\n');
 	}
 }
