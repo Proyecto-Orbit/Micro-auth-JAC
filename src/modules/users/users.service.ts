@@ -2,12 +2,14 @@ import {
 	BadRequestException,
 	ConflictException,
 	ForbiddenException,
+	Inject,
 	Injectable,
 	InternalServerErrorException,
 	Logger,
 	NotFoundException,
 } from '@nestjs/common';
 import { AxiosInstance, AxiosResponse } from 'axios';
+import { ClientProxy } from '@nestjs/microservices';
 import { KeycloakAdminService } from '../keycloak/keycloak-admin.service';
 import {
 	CreatableRole,
@@ -42,7 +44,10 @@ const OPERADOR: SystemRole = 'operador';
 export class UsersService {
 	private readonly logger = new Logger(UsersService.name);
 
-	constructor(private readonly keycloak: KeycloakAdminService) {}
+	constructor(
+		private readonly keycloak: KeycloakAdminService,
+		@Inject('USUARIOS_PRODUCER') private readonly client: ClientProxy,
+	) {}
 
 	async listUsers(): Promise<UserResponseDto[]> {
 		const client = await this.keycloak.adminClient();
@@ -111,7 +116,21 @@ export class UsersService {
 			throw error;
 		}
 
-		return this.getUserById(userId);
+		const userRes = await this.getUserById(userId);
+
+		try {
+			this.client.emit('usuario.creado_o_actualizado', {
+				id: userRes.id,
+				correo: userRes.correo,
+				nombre: userRes.nombre,
+				rol: userRes.rol,
+			});
+			this.logger.log(`Usuario creado emitido a la cola: ${userRes.correo}`);
+		} catch (error: any) {
+			this.logger.error(`Error emitiendo usuario creado a la cola: ${error.message}`);
+		}
+
+		return userRes;
 	}
 
 	async getUserById(id: string): Promise<UserResponseDto> {
@@ -158,7 +177,21 @@ export class UsersService {
 			this.throwUpstream('actualizar usuario', response);
 		}
 
-		return this.getUserById(id);
+		const userRes = await this.getUserById(id);
+
+		try {
+			this.client.emit('usuario.creado_o_actualizado', {
+				id: userRes.id,
+				correo: userRes.correo,
+				nombre: userRes.nombre,
+				rol: userRes.rol,
+			});
+			this.logger.log(`Usuario actualizado emitido a la cola: ${userRes.correo}`);
+		} catch (error: any) {
+			this.logger.error(`Error emitiendo usuario actualizado a la cola: ${error.message}`);
+		}
+
+		return userRes;
 	}
 
 	async deleteUser(id: string, caller: AuthenticatedUser): Promise<void> {
