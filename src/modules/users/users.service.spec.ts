@@ -61,7 +61,10 @@ function buildService(client: FakeClient): UsersService {
 	const keycloak = {
 		adminClient: jest.fn().mockResolvedValue(client),
 	} as unknown as KeycloakAdminService;
-	return new UsersService(keycloak);
+	const clientProxy = {
+		emit: jest.fn(),
+	} as any;
+	return new UsersService(keycloak, clientProxy);
 }
 
 describe('UsersService', () => {
